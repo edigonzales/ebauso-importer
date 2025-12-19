@@ -26,6 +26,25 @@ application {
     mainClass = 'ch.so.agi.ebau.importer.App'
 }
 
+distributions {
+    main {
+        distributionBaseName = 'ebauso-importer'
+    }
+}
+
+tasks.register('fatJar', Jar) {
+    archiveFileName = 'ebauso-importer-all.jar'
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    manifest {
+        attributes('Main-Class': application.mainClass.get())
+    }
+    from(sourceSets.main.output)
+    dependsOn(configurations.runtimeClasspath)
+    from {
+        configurations.runtimeClasspath.get().collect { it.isDirectory() ? it : zipTree(it) }
+    }
+}
+
 tasks.named('test', Test) {
     useJUnitPlatform()
 }
