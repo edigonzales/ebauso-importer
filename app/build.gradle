@@ -41,7 +41,7 @@ tasks.register('fatJar', Jar) {
     from(sourceSets.main.output)
     dependsOn(configurations.runtimeClasspath)
     from {
-        configurations.runtimeClasspath.get().collect { it.isDirectory() ? it : zipTree(it) }
+        configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) }
     }
 }
 
