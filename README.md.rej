@@ -1,0 +1,64 @@
+diff a/README.md b/README.md	(rejected hunks)
+@@ -1 +1,60 @@
+-# ebauso-importer
+\ No newline at end of file
++# ebauso-importer
++
++Java 21 Anwendung zum Paketieren von Gemeindedaten aus einem bestehenden Dossier-Verzeichnis. Die Applikation überprüft, ob für jeden Unterordner ein Eintrag in `dossiers.xlsx` vorhanden ist, erstellt Zip-Pakete mit einer Zielgröße von ca. 900 MB und protokolliert die Verteilung in einer Statistik-Arbeitsmappe.
++
++## Voraussetzungen
++- Java 21
++- Gradle Wrapper (im Repository enthalten)
++
++## Projekt bauen und testen
++```bash
++./gradlew test
++```
++
++## Anwendung starten
++Der CLI-Einstiegspunkt erwartet mindestens drei Argumente:
++
++```bash
++./gradlew run --args="<Gemeinde> <Datentyp> <Laufnummer> [--root=/basis/pfad] [--packageSizeMb=900]"
++```
++
++Beispiel:
++```bash
++./gradlew run --args="Biberist Test 1 --root=/daten/kommunen"
++```
++
++### Argumente
++- **Gemeinde**: Name des Gemeindeordners.
++- **Datentyp**: `Test` oder `Produktion` (auch Kurzformen wie `prod`/`test`).
++- **Laufnummer**: Integer für den Zielordner (`Testlauf_<Nr>` bzw. `Produktivlauf_<Nr>`).
++- **--root**: Optionales Arbeitsverzeichnis. Standard ist das aktuelle Verzeichnis.
++- **--packageSizeMb**: Optionale Zielgröße pro Zip-Paket. Standard: 900 MB.
++
++## Laufzeitverhalten
++- Erwartet unter `<root>/<Gemeinde>/<Testdaten|Produktivdaten>` eine `dossiers.xlsx` sowie Unterordner, deren Namen mit der Spalte `ID` übereinstimmen.
++- Pakete werden nach Größe gruppiert und zusammen mit einem gefilterten `dossiers.xlsx` unter `<Gemeinde>/Import/<Testlauf|Produktivlauf>_<Nr>` abgelegt. Für jedes Paket wird ein transparenter Unterordner angelegt, der identisch zu den gepackten Dateien ist.
++- Einträge ohne zugehörigen Unterordner landen in einem separaten Paket mit nur der Excel-Datei.
++- `statistics.xlsx` fasst zugeordnete Ordner, Größen (gezippt/ungezippt) und Zeilenanzahl zusammen.
++
++## Ablauf (Sequenzdiagramm)
++```mermaid
++sequenceDiagram
++    participant User
++    participant CLI as CLI (App)
++    participant FS as Filesystem
++    participant XLSX as dossiers.xlsx
++    participant Packager as ImportPackager
++    participant ZIP as Zip Writer
++    participant Stats as statistics.xlsx
++
++    User->>CLI: Start mit Gemeinde, Datentyp, Laufnummer
++    CLI->>FS: Lade Gemeinde-/Datentyp-Ordner
++    CLI->>XLSX: Lese dossiers.xlsx
++    CLI->>Packager: Übergebe Ordner + Excel-Zeilen
++    Packager->>FS: Validierung (fehlende Zeilen?)
++    Packager->>ZIP: Baue Paket-Zips (~900 MB)
++    ZIP->>FS: Schreibe Transparenz-Ordner + Zipdateien
++    Packager->>Stats: Schreibe statistics.xlsx
++    Packager-->>CLI: Ergebnis (Pakete, Größen, Fehler)
++    CLI-->>User: Abschlussmeldung
++```
