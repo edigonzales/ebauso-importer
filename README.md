@@ -23,6 +23,10 @@ Beispiel:
 ./gradlew run --args="Biberist Test 1 --root=/daten/kommunen"
 ```
 
+```bash
+java -jar ./app/build/ebauso-importer-all.jar Biberist test 4 --root=/Users/stefan/Downloads --packageSizeMb=900
+```
+
 ### Argumente
 - **Gemeinde**: Name des Gemeindeordners.
 - **Datentyp**: `Test` oder `Produktion` (auch Kurzformen wie `prod`/`test`).
