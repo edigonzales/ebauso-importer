@@ -17,10 +17,8 @@ import java.util.Set;
 
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.CellType;
-import org.apache.poi.ss.usermodel.CellValue;
 import org.apache.poi.ss.usermodel.DataFormatter;
 import org.apache.poi.ss.usermodel.DateUtil;
-import org.apache.poi.ss.usermodel.FormulaEvaluator;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
@@ -46,7 +44,6 @@ public final class DossierWorkbook {
             Sheet sheet = workbook.getSheetAt(0);
             Locale swissLocale = Locale.forLanguageTag("de-CH");
             DataFormatter formatter = new DataFormatter(swissLocale);
-            FormulaEvaluator evaluator = workbook.getCreationHelper().createFormulaEvaluator();
             DateFormat dateFormat = new SimpleDateFormat("dd.MM.yyyy", swissLocale);
             DecimalFormatSymbols coordinateSymbols = new DecimalFormatSymbols(swissLocale);
             coordinateSymbols.setDecimalSeparator('.');
@@ -55,7 +52,7 @@ public final class DossierWorkbook {
             Row headerRow = sheet.getRow(sheet.getFirstRowNum());
             List<String> headers = new ArrayList<>();
             for (Cell cell : headerRow) {
-                headers.add(formatter.formatCellValue(cell, evaluator));
+                headers.add(formatter.formatCellValue(cell));
             }
 
             int idIndex = headers.indexOf("ID");
@@ -73,7 +70,7 @@ public final class DossierWorkbook {
                 for (int col = 0; col < headers.size(); col++) {
                     Cell cell = row.getCell(col);
                     String header = headers.get(col);
-                    values.add(formatCellValue(cell, header, formatter, evaluator, dateFormat, coordinateFormat));
+                    values.add(formatCellValue(cell, header, formatter, dateFormat, coordinateFormat));
                 }
                 String id = values.get(idIndex).trim();
                 if (!id.isEmpty()) {
@@ -84,44 +81,36 @@ public final class DossierWorkbook {
         }
     }
 
-    private static String formatCellValue(Cell cell, String header, DataFormatter formatter, FormulaEvaluator evaluator,
-            DateFormat dateFormat, DecimalFormat coordinateFormat) {
+    private static String formatCellValue(Cell cell, String header, DataFormatter formatter, DateFormat dateFormat,
+            DecimalFormat coordinateFormat) {
         if (cell == null) {
             return "";
         }
         CellType cellType = cell.getCellType();
         if (cellType == CellType.FORMULA) {
-            CellValue evaluated = evaluator.evaluate(cell);
-            if (evaluated == null) {
-                return "";
-            }
-            cellType = evaluated.getCellType();
+            cellType = cell.getCachedFormulaResultType();
             return switch (cellType) {
-                case STRING -> evaluated.getStringValue();
-                case BOOLEAN -> Boolean.toString(evaluated.getBooleanValue());
-                case NUMERIC -> formatNumericValue(cell, evaluated.getNumberValue(), header, dateFormat, coordinateFormat,
-                        formatter, evaluator);
+                case STRING -> cell.getStringCellValue();
+                case BOOLEAN -> Boolean.toString(cell.getBooleanCellValue());
+                case NUMERIC -> formatNumericValue(cell, cell.getNumericCellValue(), header, dateFormat, coordinateFormat,
+                        formatter);
                 case BLANK -> "";
-                default -> formatter.formatCellValue(cell, evaluator);
+                default -> formatter.formatCellValue(cell);
             };
         }
         if (cellType == CellType.NUMERIC) {
-            return formatNumericValue(cell, cell.getNumericCellValue(), header, dateFormat, coordinateFormat, formatter,
-                    null);
+            return formatNumericValue(cell, cell.getNumericCellValue(), header, dateFormat, coordinateFormat, formatter);
         }
         return formatter.formatCellValue(cell);
     }
 
     private static String formatNumericValue(Cell cell, double numericValue, String header, DateFormat dateFormat,
-            DecimalFormat coordinateFormat, DataFormatter formatter, FormulaEvaluator evaluator) {
+            DecimalFormat coordinateFormat, DataFormatter formatter) {
         if (DateUtil.isCellDateFormatted(cell)) {
             return dateFormat.format(cell.getDateCellValue());
         }
         if (COORDINATE_HEADERS.contains(header)) {
             return coordinateFormat.format(numericValue);
-        }
-        if (evaluator != null) {
-            return formatter.formatCellValue(cell, evaluator);
         }
         return formatter.formatCellValue(cell);
     }
