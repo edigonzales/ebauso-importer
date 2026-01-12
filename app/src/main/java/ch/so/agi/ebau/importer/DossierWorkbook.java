@@ -4,14 +4,23 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.text.DateFormat;
+import java.text.DecimalFormat;
+import java.text.DecimalFormatSymbols;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 import org.apache.poi.ss.usermodel.Cell;
+import org.apache.poi.ss.usermodel.CellType;
+import org.apache.poi.ss.usermodel.CellValue;
 import org.apache.poi.ss.usermodel.DataFormatter;
+import org.apache.poi.ss.usermodel.DateUtil;
+import org.apache.poi.ss.usermodel.FormulaEvaluator;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
@@ -19,6 +28,7 @@ import org.apache.poi.ss.usermodel.WorkbookFactory;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 
 public final class DossierWorkbook {
+    private static final Set<String> COORDINATE_HEADERS = Set.of("COORDINATE-N", "COORDINATE-E");
     private final String sheetName;
     private final List<String> headers;
     private final List<DossierEntry> entries;
@@ -34,11 +44,18 @@ public final class DossierWorkbook {
     public static DossierWorkbook read(Path workbookPath) throws IOException {
         try (Workbook workbook = WorkbookFactory.create(Files.newInputStream(workbookPath))) {
             Sheet sheet = workbook.getSheetAt(0);
-            DataFormatter formatter = new DataFormatter(Locale.GERMANY);
+            Locale swissLocale = Locale.forLanguageTag("de-CH");
+            DataFormatter formatter = new DataFormatter(swissLocale);
+            FormulaEvaluator evaluator = workbook.getCreationHelper().createFormulaEvaluator();
+            DateFormat dateFormat = new SimpleDateFormat("dd.MM.yyyy", swissLocale);
+            DecimalFormatSymbols coordinateSymbols = new DecimalFormatSymbols(swissLocale);
+            coordinateSymbols.setDecimalSeparator('.');
+            DecimalFormat coordinateFormat = new DecimalFormat("0.00", coordinateSymbols);
+            coordinateFormat.setGroupingUsed(false);
             Row headerRow = sheet.getRow(sheet.getFirstRowNum());
             List<String> headers = new ArrayList<>();
             for (Cell cell : headerRow) {
-                headers.add(formatter.formatCellValue(cell));
+                headers.add(formatter.formatCellValue(cell, evaluator));
             }
 
             int idIndex = headers.indexOf("ID");
@@ -55,7 +72,8 @@ public final class DossierWorkbook {
                 List<String> values = new ArrayList<>();
                 for (int col = 0; col < headers.size(); col++) {
                     Cell cell = row.getCell(col);
-                    values.add(cell == null ? "" : formatter.formatCellValue(cell));
+                    String header = headers.get(col);
+                    values.add(formatCellValue(cell, header, formatter, evaluator, dateFormat, coordinateFormat));
                 }
                 String id = values.get(idIndex).trim();
                 if (!id.isEmpty()) {
@@ -64,6 +82,48 @@ public final class DossierWorkbook {
             }
             return new DossierWorkbook(sheet.getSheetName(), headers, entries, idIndex);
         }
+    }
+
+    private static String formatCellValue(Cell cell, String header, DataFormatter formatter, FormulaEvaluator evaluator,
+            DateFormat dateFormat, DecimalFormat coordinateFormat) {
+        if (cell == null) {
+            return "";
+        }
+        CellType cellType = cell.getCellType();
+        if (cellType == CellType.FORMULA) {
+            CellValue evaluated = evaluator.evaluate(cell);
+            if (evaluated == null) {
+                return "";
+            }
+            cellType = evaluated.getCellType();
+            return switch (cellType) {
+                case STRING -> evaluated.getStringValue();
+                case BOOLEAN -> Boolean.toString(evaluated.getBooleanValue());
+                case NUMERIC -> formatNumericValue(cell, evaluated.getNumberValue(), header, dateFormat, coordinateFormat,
+                        formatter, evaluator);
+                case BLANK -> "";
+                default -> formatter.formatCellValue(cell, evaluator);
+            };
+        }
+        if (cellType == CellType.NUMERIC) {
+            return formatNumericValue(cell, cell.getNumericCellValue(), header, dateFormat, coordinateFormat, formatter,
+                    null);
+        }
+        return formatter.formatCellValue(cell);
+    }
+
+    private static String formatNumericValue(Cell cell, double numericValue, String header, DateFormat dateFormat,
+            DecimalFormat coordinateFormat, DataFormatter formatter, FormulaEvaluator evaluator) {
+        if (DateUtil.isCellDateFormatted(cell)) {
+            return dateFormat.format(cell.getDateCellValue());
+        }
+        if (COORDINATE_HEADERS.contains(header)) {
+            return coordinateFormat.format(numericValue);
+        }
+        if (evaluator != null) {
+            return formatter.formatCellValue(cell, evaluator);
+        }
+        return formatter.formatCellValue(cell);
     }
 
     public void writeFiltered(Path target, List<DossierEntry> filteredEntries) throws IOException {
