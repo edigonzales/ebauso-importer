@@ -166,6 +166,15 @@ public final class DossierWorkbook {
         return idColumnIndex;
     }
 
+    public int headerIndex(String headerName) {
+        for (int i = 0; i < headers.size(); i++) {
+            if (headers.get(i).equalsIgnoreCase(headerName)) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
     public record DossierEntry(String id, List<String> values, int rowIndex) {
     }
 }

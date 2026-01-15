@@ -23,6 +23,8 @@ import org.slf4j.LoggerFactory;
 
 public class ImportPackager {
     private static final Logger LOGGER = LoggerFactory.getLogger(ImportPackager.class);
+    private static final Set<String> KNOWN_STATUSES = Set.of("SUBMITTED", "APPROVED", "REJECTED", "WRITTEN OFF", "DONE");
+    private static final String UNKNOWN_STATUS = "UNKNOWN";
 
     private final Path rootPath;
     private final long packageSizeBytes;
@@ -134,7 +136,6 @@ public class ImportPackager {
             Path target = packageFolder.resolve(folder.getFileName());
             copyFolder(folder, target);
             long folderSize = calculateSize(folder);
-            uncompressedSum += folderSize;
             statistics.addAssignment(packageName, folder.getFileName().toString(), folderSize, 0);
         }
 
@@ -144,10 +145,15 @@ public class ImportPackager {
             }
         }
 
+        uncompressedSum = calculateSize(packageFolder);
+        int documentCount = countDocuments(packageFolder);
+
         Path zipPath = runFolder.resolve(packageName + ".zip");
         zipDirectory(packageFolder, zipPath);
         long zipSize = Files.size(zipPath);
         statistics.registerZipSize(packageName, zipSize);
+        statistics.registerPackageTotals(packageName, uncompressedSum, zipSize, plan.entries().size(), plan.folders().size(),
+                documentCount, calculateStatusTotals(plan.entries(), workbook));
         LOGGER.info("Paket {} erstellt (ungepackt {} Bytes, gezippt {} Bytes)", packageName, uncompressedSum, zipSize);
     }
 
@@ -175,6 +181,34 @@ public class ImportPackager {
                         }
                     }).sum();
         }
+    }
+
+    private int countDocuments(Path folder) throws IOException {
+        try (var stream = Files.walk(folder)) {
+            return (int) stream.filter(Files::isRegularFile).count();
+        }
+    }
+
+    private Map<String, Integer> calculateStatusTotals(List<DossierEntry> entries, DossierWorkbook workbook) {
+        int statusIndex = workbook.headerIndex("STATUS");
+        Map<String, Integer> totals = new LinkedHashMap<>();
+        if (statusIndex < 0) {
+            return totals;
+        }
+        for (DossierEntry entry : entries) {
+            List<String> values = entry.values();
+            if (statusIndex >= values.size()) {
+                totals.put(UNKNOWN_STATUS, totals.getOrDefault(UNKNOWN_STATUS, 0) + 1);
+                continue;
+            }
+            String status = values.get(statusIndex).trim().toUpperCase();
+            if (status.isEmpty() || !KNOWN_STATUSES.contains(status)) {
+                totals.put(UNKNOWN_STATUS, totals.getOrDefault(UNKNOWN_STATUS, 0) + 1);
+                continue;
+            }
+            totals.put(status, totals.getOrDefault(status, 0) + 1);
+        }
+        return totals;
     }
 
     private void copyFolder(Path source, Path target) throws IOException {
