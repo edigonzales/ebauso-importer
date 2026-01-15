@@ -119,6 +119,8 @@ public final class DossierWorkbook {
         Files.createDirectories(target.getParent());
         try (Workbook workbook = new XSSFWorkbook()) {
             Sheet sheet = workbook.createSheet(sheetName);
+            var coordinateStyle = workbook.createCellStyle();
+            coordinateStyle.setDataFormat(workbook.createDataFormat().getFormat("0.00"));
             Row headerRow = sheet.createRow(0);
             for (int i = 0; i < headers.size(); i++) {
                 headerRow.createCell(i).setCellValue(headers.get(i));
@@ -128,7 +130,18 @@ public final class DossierWorkbook {
                 Row row = sheet.createRow(rowIndex++);
                 List<String> values = entry.values();
                 for (int col = 0; col < headers.size(); col++) {
-                    row.createCell(col).setCellValue(col < values.size() ? values.get(col) : "");
+                    String value = col < values.size() ? values.get(col) : "";
+                    Cell cell = row.createCell(col);
+                    if (!value.isBlank() && COORDINATE_HEADERS.contains(headers.get(col))) {
+                        try {
+                            cell.setCellValue(Double.parseDouble(value));
+                            cell.setCellStyle(coordinateStyle);
+                        } catch (NumberFormatException ex) {
+                            cell.setCellValue(value);
+                        }
+                    } else {
+                        cell.setCellValue(value);
+                    }
                 }
             }
             try (OutputStream out = Files.newOutputStream(target)) {
