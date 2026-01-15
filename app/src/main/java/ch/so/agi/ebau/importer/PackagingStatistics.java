@@ -14,7 +14,7 @@ import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 
 public final class PackagingStatistics {
-    private static final String[] STATUS_HEADERS = { "SUBMITTED", "APPROVED", "REJECTED", "WRITTEN OFF", "DONE" };
+    private static final String[] STATUS_HEADERS = { "SUBMITTED", "APPROVED", "REJECTED", "WRITTEN OFF", "DONE", "UNKNOWN" };
     private final int originalRowCount;
     private final List<Assignment> assignments = new ArrayList<>();
     private final Map<String, Long> zipSizes = new HashMap<>();

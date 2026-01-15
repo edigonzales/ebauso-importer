@@ -23,6 +23,8 @@ import org.slf4j.LoggerFactory;
 
 public class ImportPackager {
     private static final Logger LOGGER = LoggerFactory.getLogger(ImportPackager.class);
+    private static final Set<String> KNOWN_STATUSES = Set.of("SUBMITTED", "APPROVED", "REJECTED", "WRITTEN OFF", "DONE");
+    private static final String UNKNOWN_STATUS = "UNKNOWN";
 
     private final Path rootPath;
     private final long packageSizeBytes;
@@ -196,10 +198,12 @@ public class ImportPackager {
         for (DossierEntry entry : entries) {
             List<String> values = entry.values();
             if (statusIndex >= values.size()) {
+                totals.put(UNKNOWN_STATUS, totals.getOrDefault(UNKNOWN_STATUS, 0) + 1);
                 continue;
             }
             String status = values.get(statusIndex).trim().toUpperCase();
-            if (status.isEmpty()) {
+            if (status.isEmpty() || !KNOWN_STATUSES.contains(status)) {
+                totals.put(UNKNOWN_STATUS, totals.getOrDefault(UNKNOWN_STATUS, 0) + 1);
                 continue;
             }
             totals.put(status, totals.getOrDefault(status, 0) + 1);
